@@ -1,0 +1,264 @@
+---
+title: "Forecast daily bike rental demand using time series models"
+date: "`r Sys.Date()`"
+output: html_document
+author: "Vikashini balasubramanian"
+---
+
+```{r}
+
+```
+
+# About Data Analysis Report
+
+This RMarkdown file contains the report of the data analysis done for the project on forecasting daily bike rental demand using time series models in R. It contains analysis such as data exploration, summary statistics and building the time series models. The final report was completed on `r date()`.
+
+**Data Description:**
+
+This dataset contains the daily count of rental bike transactions between years 2011 and 2012 in Capital bikeshare system with the corresponding weather and seasonal information.
+
+**Data Source:** <https://archive.ics.uci.edu/ml/datasets/bike+sharing+dataset>
+
+**Relevant Paper:**
+
+Fanaee-T, Hadi, and Gama, Joao, 'Event labeling combining ensemble detectors and background knowledge', Progress in Artificial Intelligence (2013): pp. 1-15, Springer Berlin Heidelberg
+
+# Task One: Load and explore the data
+
+## Load data and install packages
+
+```{r}
+## Import required packages
+# Install timetk package (only once)
+install.packages("timetk")
+
+# Load the package
+library(timetk)
+
+# Load the built-in dataset
+data("bike_sharing_daily")
+
+# Rename it
+bike_data <- bike_sharing_daily
+
+
+```
+
+## Describe and explore the data
+
+```{r}
+# View the dataset
+View(bike_data)
+
+# Check structure
+str(bike_data)
+
+# Summary statistics
+summary(bike_data)
+
+# Column names
+colnames(bike_data)
+
+# Number of rows and columns
+dim(bike_data)
+
+# Date range
+range(bike_data$dteday)
+
+# Rental count summary
+summary(bike_data$cnt)
+
+# Average rentals by season
+aggregate(cnt ~ season, data = bike_data, FUN = mean)
+
+# Plot rentals over time
+plot(bike_data$dteday, bike_data$cnt, type = "l",
+     main = "Bike Rentals Over Time",
+     xlab = "Date", ylab = "Total Rentals")
+
+# Correlation between temperature and total rentals
+cor(bike_data$temp, bike_data$cnt)    # Normalized actual temp
+cor(bike_data$atemp, bike_data$cnt)   # Normalized feeling temp
+
+# Mean temperature by season
+aggregate(temp ~ season, data = bike_data, mean)
+
+# Median temperature by season
+aggregate(temp ~ season, data = bike_data, median)
+
+# Create a month column
+bike_data$month <- format(bike_data$dteday, "%m")
+
+# Calculate monthly averages
+aggregate(cbind(temp, hum, windspeed, cnt) ~ month, data = bike_data, mean)
+
+# Correlation with temperature
+cor(bike_data$temp, bike_data$casual)
+cor(bike_data$temp, bike_data$registered)
+
+boxplot(temp ~ season, data = bike_data,
+        main = "Temperature Distribution by Season",
+        xlab = "Season (1=Winter, 2=Spring, 3=Summer, 4=Fall)",
+        ylab = "Normalized Temperature",
+        col = c("lightblue", "lightgreen", "lightpink", "lightyellow"))
+
+```
+
+# Task Two: Create interactive time series plots
+
+```{r}
+## Read about the timetk package
+# ?timetk
+# Add year column
+bike_data$year<-year(bike_data$dteday)
+
+# Interactive time series plot: total rentals
+plot_time_series(.data = bike_data,
+                 .date_var = dteday,
+                 .value = cnt,
+                 .title = "Total Bike Rentals Over Time",
+                 .interactive = TRUE,
+                 .plotly_slider = TRUE)
+
+# Grouped by year
+plot_time_series(.data = bike_data,
+                 .date_var = dteday,
+                 .value = cnt,
+                 .color_var = year,
+                 .title = "Total Bike Rentals by Year",
+                 .interactive = TRUE)
+
+# Seasonal diagnostics
+plot_seasonal_diagnostics(.data=bike_data,
+                          .date_var = dteday,
+                          .value = cnt,
+                          .interactive = TRUE)
+
+# Anomaly detection
+plot_anomaly_diagnostics(.data = bike_data,
+                         .date_var = dteday,
+                         .value = cnt,
+                         .interactive = TRUE)
+
+```
+
+# Task Three: Smooth time series data
+
+```{r}
+install.packages("forecast")
+install.packages("TTR")  # For SMA
+library(forecast)
+library(TTR)
+# Order the data by date (just in case)
+bike_data <- bike_data[order(bike_data$dteday), ]
+
+# Create a time series object from total daily rentals
+bike_ts <- ts(bike_data$cnt, frequency = 365, start = c(2011, 1))
+
+clean_bike_ts <- tsclean(bike_ts)
+
+plot(bike_ts, main = "Original Bike Rentals Time Series", col = "yellow")
+lines(clean_bike_ts, col = "blue")
+legend("topleft", legend = c("Original", "Cleaned"), col = c("yellow", "blue"), lty = 1)
+
+
+bike_sma <- SMA(clean_bike_ts, n = 10)
+plot(bike_sma, main = "Smoothed Time Series with 10-Day Moving Average", col = "navy")
+
+
+bike_hw <- HoltWinters(clean_bike_ts, beta = FALSE, gamma = FALSE)
+plot(bike_hw, main = "Simple Exponential Smoothing (Holt-Winters)")
+
+
+bike_forecast <- forecast(bike_hw, h = 30)
+plot(bike_forecast, main = "30-Day Forecast of Bike Rentals")
+
+
+```
+
+# Task Four: Decompse and access the stationarity of time series data
+
+```{r}
+plot(bike_sma, main = "Smoothed Moving Average (SMA) - Check for Trend/Seasonality", col = "darkgreen")
+
+decomposed_bike <- decompose(bike_ts)
+
+# Plot the components
+plot(decomposed_bike)
+
+seasonally_adjusted <- bike_ts - decomposed_bike$seasonal
+plot(seasonally_adjusted, main = "Seasonally Adjusted Series")
+
+acf(seasonally_adjusted, main = "ACF - Seasonally Adjusted")
+pacf(seasonally_adjusted, main = "PACF - Seasonally Adjusted")
+
+install.packages("tseries")
+library(tseries)
+
+adf.test(seasonally_adjusted, alternative = "stationary")
+
+diff_bike <- diff(seasonally_adjusted)
+
+# Plot differenced data
+plot(diff_bike, main = "Differenced Series")
+acf(diff_bike, main = "ACF - Differenced")
+pacf(diff_bike, main = "PACF - Differenced")
+adf.test(diff_bike, alternative = "stationary")
+
+```
+
+# Task Five: Fit and forecast time series data using ARIMA models
+
+```{r}
+library(forecast)
+library(tseries)
+auto_model <- auto.arima(seasonally_adjusted)
+summary(auto_model)
+
+manual_model <- arima(seasonally_adjusted, order = c(2,1,1))
+summary(manual_model)
+checkresiduals(auto_model)
+
+acf(residuals(auto_model), main = "ACF of Auto ARIMA Residuals")
+pacf(residuals(auto_model), main = "PACF of Auto ARIMA Residuals")
+
+shapiro.test(residuals(auto_model))
+
+AIC(auto_model); BIC(auto_model)
+AIC(manual_model); BIC(manual_model)
+
+auto_forecast <- forecast(auto_model, h = 25)
+plot(auto_forecast, main = "Forecast from Auto ARIMA")
+
+manual_forecast <- forecast(manual_model, h = 25)
+plot(manual_forecast, main = "Forecast from Manual ARIMA")
+
+```
+
+# Task Six: Findings and Conclusions
+
+## 📌 Conclusion
+
+Throughout this project, I worked with the `bike_sharing_daily` dataset, which records the daily count of bike rentals in Washington, D.C., along with various weather and seasonal features. The goal was to perform a thorough time series analysis and forecasting using ARIMA models.
+
+### 🔍 Key Learnings:
+
+-   I learned how to explore and visualize time series data using tools like `timetk`, and how to draw insights from patterns such as seasonality and trends.
+-   I applied techniques like decomposition and differencing to make the data stationary, a crucial step for advanced modeling.
+-   I used both manual ARIMA and auto ARIMA methods to model and forecast bike rental demand.
+-   I evaluated the models based on residual patterns, AIC/BIC values, and forecast performance.
+
+### ✅ Key Findings:
+
+-   **Seasonality and Temperature**: Bike rentals were clearly influenced by seasonality and temperature — higher rentals were observed in warmer months.
+-   **Strong Correlations**: Normalized temperature and feeling temperature showed a strong positive correlation with the number of rentals.
+-   **Modeling Insights**: Auto ARIMA selected an optimal model based on AIC. Residuals passed the normality and randomness checks, indicating a good fit.
+-   **Forecast**: The 25-day forecast provides a reasonable and interpretable estimate of future bike rental demand with confidence intervals.
+
+### 📈 Takeaways:
+
+-   Time series forecasting can be highly effective in understanding and predicting real-world patterns.
+-   Cleaning the data and ensuring stationarity are essential for accurate ARIMA modeling.
+-   Interactive visualizations and seasonal diagnostics are powerful tools for interpreting data behavior over time.
+
+This project gave me hands-on experience with the full cycle of time series analysis — from data loading and cleaning, through modeling and diagnostics, to forecasting and interpretation.
