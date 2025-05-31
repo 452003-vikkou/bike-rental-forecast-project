@@ -52,8 +52,8 @@ The goal of this project is to:
 
 ## 📁 Files in this Repository
 
-- `Forecast-daily-bike-rental-demand-using-time-series-models.Rmd` — R Markdown script containing all code and analysis.
-- `Forecast-daily-bike-rental-demand-using-time-series-models.html` — Knitted HTML report with results and visualizations.
+- 'demand-using-time-series-models.Rmd` — R Markdown script containing all code and analysis.
+- 'demand-using-time-series-models.html` — Knitted HTML report with results and visualizations.
 
 
 ## 📍 How to Run
